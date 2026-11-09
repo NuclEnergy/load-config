@@ -7,6 +7,15 @@
 - `$text` special directive that loads a UTF-8 file verbatim as a string, regardless of its extension
 - `Loader::load_text` and `Loader::text`
 
+### Changed
+
+- Updated dependencies to their latest versions
+- Raised the minimum supported Rust version to 1.88
+
+### Removed
+
+- Unused optional `serde-untagged` dependency and its implicit feature
+
 ### Fixed
 
 - The crate now compiles with the `json` feature disabled
