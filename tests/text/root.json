@@ -1,0 +1,5 @@
+{
+  "service": { "$path": "nested/service.yaml" },
+  "port_text": { "$text": "port.txt" },
+  "directive_text": { "$text": "directive.json" }
+}

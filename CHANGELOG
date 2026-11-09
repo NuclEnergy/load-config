@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0] - 2026-11-09
+
+### Added
+
+- `$text` special directive that loads a UTF-8 file verbatim as a string, regardless of its extension
+- `Loader::load_text` and `Loader::text`
+
+### Fixed
+
+- The crate now compiles with the `json` feature disabled
+
 ## [0.1.0] - 2026-04-03
 
 ### Added

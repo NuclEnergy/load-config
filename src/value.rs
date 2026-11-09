@@ -178,6 +178,7 @@ impl Value {
                 return match key.as_str() {
                     "$path" => Special::new_path(&raw).load_value_with_base(base_dir),
                     "$env" => Special::new_env(&raw).load_value(),
+                    "$text" => Special::new_text(&raw).load_value_with_base(base_dir),
                     _ => unreachable!("checked by is_special_key"),
                 };
             }

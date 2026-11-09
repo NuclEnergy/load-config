@@ -13,6 +13,7 @@ A flexible configuration loader for Rust that supports loading typed configs fro
 - Resolve inline special directives:
   - `$path`
   - `$env`
+  - `$text`
 - Recursive config composition
 - Relative `$path` resolution based on the current file location
 - Supports multiple input formats through feature flags
@@ -23,7 +24,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-load-config = "0.1"
+load-config = "0.2"
 serde = { version = "1", features = ["derive"] }
 ```
 
@@ -31,7 +32,7 @@ If you want to control enabled formats, you can disable default features and opt
 
 ```toml
 [dependencies]
-load-config = { version = "0.1", default-features = false, features = ["json", "toml", "yaml"] }
+load-config = { version = "0.2", default-features = false, features = ["json", "toml", "yaml"] }
 serde = { version = "1", features = ["derive"] }
 ```
 
@@ -153,6 +154,28 @@ then the resolved result can deserialize as:
 }
 ```
 
+### `$text`
+
+Use `$text` to replace the current node with the contents of a UTF-8 text file as a string. The file extension does not matter, so it works for `.pem`, `.crt`, `.key`, or files with no extension.
+
+Input:
+
+```json
+{
+  "tls": {
+    "cert": { "$text": "certs/server.pem" },
+    "key": { "$text": "certs/server.key" }
+  }
+}
+```
+
+`cert` and `key` can then deserialize into `String` fields.
+
+- Relative paths are resolved the same way as `$path`
+- The content is kept exactly as it is, including trailing newlines and line endings
+- The content is not parsed: a file containing `3306` stays the string `"3306"`, and directives inside it are not resolved
+- Files that are not valid UTF-8 return an error
+
 ### Nested Composition
 
 Special directives can be nested and are resolved recursively.
@@ -226,6 +249,12 @@ let value = Loader::load_value_from_path("config.toml")?;
 let value = Loader::load_value_from_env("APP_CONFIG")?;
 ```
 
+### Load a plain text file
+
+```rust
+let pem: String = Loader::load_text("certs/server.pem")?;
+```
+
 ### Builder-style entry
 
 ```rust
@@ -233,6 +262,7 @@ let loader = Loader::new();
 
 let config = loader.path("config.toml").load::<MyConfig>()?;
 let config = loader.env("APP_CONFIG").load::<MyConfig>()?;
+let pem = loader.text("certs/server.pem").load::<String>()?;
 ```
 
 ## Supported Formats

@@ -26,6 +26,10 @@ impl Loader {
         Self::new().env(&name).load()
     }
 
+    pub fn load_text(path: impl AsRef<Path>) -> Result<String, Error> {
+        Self::new().text(&path).load()
+    }
+
     pub fn load_value_from_path(path: impl AsRef<Path>) -> Result<Value, Error> {
         Self::new().path(&path).load_value()
     }
@@ -43,6 +47,12 @@ impl Loader {
     pub fn env<'a>(&self, name: &'a impl AsRef<str>) -> Source<'a> {
         Source {
             special: Special::new_env(name.as_ref()),
+        }
+    }
+
+    pub fn text<'a>(&self, path: &'a impl AsRef<Path>) -> Source<'a> {
+        Source {
+            special: Special::Text(path.as_ref()),
         }
     }
 }

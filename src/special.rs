@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize};
 
 use crate::{Error, map::Map, value::Value};
 
@@ -10,6 +10,8 @@ pub enum Special<'a> {
     Path(&'a Path),
     #[serde(rename = "$env")]
     Env(&'a str),
+    #[serde(rename = "$text")]
+    Text(&'a Path),
 }
 
 impl<'a> Special<'a> {
@@ -17,12 +19,16 @@ impl<'a> Special<'a> {
         Self::Path(Path::new(path))
     }
 
+    pub(crate) fn new_text(path: &'a str) -> Self {
+        Self::Text(Path::new(path))
+    }
+
     pub(crate) fn new_env(env: &'a str) -> Self {
         Self::Env(env)
     }
 
     pub(crate) fn is_special_key(key: &str) -> bool {
-        matches!(key, "$path" | "$env")
+        matches!(key, "$path" | "$env" | "$text")
     }
 
     pub(crate) fn load_value(&self) -> Result<Value, Error> {
@@ -33,6 +39,7 @@ impl<'a> Special<'a> {
         match self {
             Self::Path(path) => load_value_from_path(path, base_dir),
             Self::Env(name) => load_value_from_env(name),
+            Self::Text(path) => load_text_from_path(path, base_dir),
         }
     }
 }
@@ -42,13 +49,25 @@ fn load_value_from_env(name: &str) -> Result<Value, Error> {
         Error::Message(format!("failed to read environment variable {name}: {err}"))
     })?;
 
-    parse_string_like_value::<Value>(&value)?.resolve_specials(None)
+    parse_string_like_value(&value)?.resolve_specials(None)
 }
 
-fn load_value_from_path(path: &Path, base_dir: Option<&Path>) -> Result<Value, Error> {
+/// Text content is a leaf: it is neither parsed nor scanned for directives.
+fn load_text_from_path(path: &Path, base_dir: Option<&Path>) -> Result<Value, Error> {
+    let (_, content) = read_file(path, base_dir)?;
+    Ok(Value::String(content))
+}
+
+fn read_file(path: &Path, base_dir: Option<&Path>) -> Result<(PathBuf, String), Error> {
     let resolved = resolve_path(path, base_dir);
     let content = std::fs::read_to_string(&resolved)
         .map_err(|err| Error::Message(format!("failed to read {}: {err}", resolved.display())))?;
+
+    Ok((resolved, content))
+}
+
+fn load_value_from_path(path: &Path, base_dir: Option<&Path>) -> Result<Value, Error> {
+    let (resolved, content) = read_file(path, base_dir)?;
 
     let ext = resolved
         .extension()
@@ -57,7 +76,7 @@ fn load_value_from_path(path: &Path, base_dir: Option<&Path>) -> Result<Value, E
 
     let current_base_dir = resolved.parent();
 
-    let value = match ext.as_deref() {
+    let value: Value = match ext.as_deref() {
         Some("json") => {
             #[cfg(feature = "json")]
             {
@@ -127,13 +146,13 @@ fn load_value_from_path(path: &Path, base_dir: Option<&Path>) -> Result<Value, E
         }
         Some(ext) => {
             return Err(Error::Message(format!(
-                "unsupported file extension .{ext} for {}",
+                "unsupported file extension .{ext} for {}; use $text to load it as plain text",
                 resolved.display()
             )));
         }
         None => {
             return Err(Error::Message(format!(
-                "cannot determine file format for {}",
+                "cannot determine file format for {}; use $text to load it as plain text",
                 resolved.display()
             )));
         }
@@ -152,17 +171,21 @@ fn resolve_path(path: &Path, base_dir: Option<&Path>) -> PathBuf {
     }
 }
 
-fn parse_string_like_value<T>(value: &str) -> Result<T, Error>
-where
-    T: DeserializeOwned,
-{
-    if let Ok(parsed) = serde_json::from_str::<T>(value) {
+#[cfg(feature = "json")]
+fn parse_string_like_value(value: &str) -> Result<Value, Error> {
+    if let Ok(parsed) = serde_json::from_str::<Value>(value) {
         return Ok(parsed);
     }
 
     let quoted = format!("{value:?}");
-    serde_json::from_str::<T>(&quoted)
+    serde_json::from_str::<Value>(&quoted)
         .map_err(|err| Error::Message(format!("failed to deserialize special value: {err}")))
+}
+
+/// Without JSON support an environment variable can only be taken verbatim.
+#[cfg(not(feature = "json"))]
+fn parse_string_like_value(value: &str) -> Result<Value, Error> {
+    Ok(Value::String(value.to_owned()))
 }
 
 #[cfg(feature = "yaml")]
